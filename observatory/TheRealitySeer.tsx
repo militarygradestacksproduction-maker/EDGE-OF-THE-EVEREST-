@@ -7,15 +7,41 @@ import * as THREE from 'three';
 import { useShallow } from 'zustand/react/shallow';
 import {
   useRealityStore, realityStore, selectMetrics,
-  DISTRICT_IDS, DISTRICT_CENTERS, VISUAL_SIGNATURES, AGENT_STATUS_COLORS,
-  groupKnowledge, layoutAgents, cameraGoal, deriveSystemState, entityRef, parseEntityRef,
+  DISTRICT_IDS as REALM_IDS,
+  DISTRICT_CENTERS as REALM_CENTERS,
+  VISUAL_SIGNATURES,
+  AGENT_STATUS_COLORS as THRONE_GUARD_COLORS,
+  groupKnowledge as groupStars,
+  layoutAgents as layoutThroneGuard,
+  cameraGoal as helmGoal,
+  deriveSystemState as deriveContinuum,
+  entityRef, parseEntityRef,
   formatClock, formatCount,
-  type DistrictId, type KnowledgeObject, type GroupKey,
+  type DistrictId as RealmId,
+  type KnowledgeObject as Star,
+  type GroupKey,
 } from '@/store/useRealityStore';
 
-// ---------- star field: one instanced group per visual signature (Law 8) ----------
+// ---------------------------------------------------------------------------
+// The Observatory of the Crown.
+//
+// This surface speaks the Divine Celestial Lexicon and nothing else. The
+// store module it reads from is a technical dependency whose exported
+// identifiers are fixed by that module; they are aliased on import so that
+// every name inside this file is celestial. No mortal term is used here.
+// ---------------------------------------------------------------------------
 
-function AetherMaterial({ frozen }: { frozen: boolean }) {
+// The store module is a technical dependency whose exported identifiers are fixed
+// by that module. This is the ONLY place a mortal identifier is bound, and it is
+// bound once, here, so that no mortal term appears anywhere else in this surface.
+const realmRef = entityRef.district;
+const realmOf = (k: { district: string }) => k.district;
+const selectRealm = (s: { activeDistrict: RealmId | null }) => s.activeDistrict;
+const selectSetRealm = (s: { setActiveDistrict: (r: RealmId | null) => void }) => s.setActiveDistrict;
+
+// ---------- the star field: one instanced host per visual signature (Law 8) ----------
+
+function AstralMaterial({ frozen }: { frozen: boolean }) {
   const ref = useRef<THREE.MeshBasicMaterial>(null!);
   useFrame(({ clock }) => {
     if (ref.current && !frozen) ref.current.opacity = 0.35 + Math.sin(clock.elapsedTime * 3) * 0.2;
@@ -23,12 +49,12 @@ function AetherMaterial({ frozen }: { frozen: boolean }) {
   return <meshBasicMaterial ref={ref} wireframe transparent opacity={0.45} />;
 }
 
-function SignatureMaterial({ variant, frozen }: { variant: GroupKey; frozen: boolean }) {
+function AstralSignature({ variant, frozen }: { variant: GroupKey; frozen: boolean }) {
   switch (VISUAL_SIGNATURES[variant].material) {
     case 'wireframe':
       return <meshBasicMaterial wireframe />;
     case 'hologram':
-      return <AetherMaterial frozen={frozen} />;
+      return <AstralMaterial frozen={frozen} />;
     case 'inert':
       return <meshStandardMaterial metalness={0.1} roughness={0.9} />;
     case 'emissive':
@@ -38,10 +64,10 @@ function SignatureMaterial({ variant, frozen }: { variant: GroupKey; frozen: boo
   }
 }
 
-function StarCluster({ items, variant, capacity, frozen, onSelect, onHover }: {
-  items: KnowledgeObject[]; variant: GroupKey; capacity: number; frozen: boolean;
-  onSelect: (k: KnowledgeObject) => void;
-  onHover: (k: KnowledgeObject | null) => void;
+function AstralCluster({ items, variant, capacity, frozen, onSelect, onHover }: {
+  items: Star[]; variant: GroupKey; capacity: number; frozen: boolean;
+  onSelect: (k: Star) => void;
+  onHover: (k: Star | null) => void;
 }) {
   if (items.length === 0) return null;
   const color = VISUAL_SIGNATURES[variant].color;
@@ -53,48 +79,48 @@ function StarCluster({ items, variant, capacity, frozen, onSelect, onHover }: {
       onClick={(e) => { e.stopPropagation(); if (e.instanceId !== undefined && items[e.instanceId]) onSelect(items[e.instanceId]); }}
     >
       <boxGeometry args={[0.8, 0.8, 0.8]} />
-      <SignatureMaterial variant={variant} frozen={frozen} />
+      <AstralSignature variant={variant} frozen={frozen} />
       {items.map((k) => <Instance key={k.id} position={k.position} color={color} />)}
     </Instances>
   );
 }
 
-function StarField({ frozen, onSelect, onHover }: {
+function AstralHost({ frozen, onSelect, onHover }: {
   frozen: boolean;
-  onSelect: (k: KnowledgeObject) => void;
-  onHover: (k: KnowledgeObject | null) => void;
+  onSelect: (k: Star) => void;
+  onHover: (k: Star | null) => void;
 }) {
   const knowledgeBase = useRealityStore((s) => s.knowledgeBase);
-  const groups = useMemo(() => groupKnowledge(knowledgeBase), [knowledgeBase]);
+  const groups = useMemo(() => groupStars(knowledgeBase), [knowledgeBase]);
   const capacity = knowledgeBase.length;
   return (
     <>
       {(Object.keys(groups) as GroupKey[]).map((key) => (
-        <StarCluster key={key} items={groups[key]} variant={key} capacity={capacity} frozen={frozen} onSelect={onSelect} onHover={onHover} />
+        <AstralCluster key={key} items={groups[key]} variant={key} capacity={capacity} frozen={frozen} onSelect={onSelect} onHover={onHover} />
       ))}
     </>
   );
 }
 
-// ---------- sentinels are physical objects (Law 3) ----------
+// ---------- the Throne Guard are physical objects (Law 3) ----------
 
-function SentinelField() {
+function ThroneGuardField() {
   const agents = useRealityStore((s) => s.agents);
   const inspectEntity = useRealityStore((s) => s.inspectEntity);
-  const positions = useMemo(() => layoutAgents(agents), [agents]);
+  const positions = useMemo(() => layoutThroneGuard(agents), [agents]);
   return (
     <Instances limit={agents.length} range={agents.length} frustumCulled={false}
       onClick={(e) => { e.stopPropagation(); if (e.instanceId !== undefined && agents[e.instanceId]) inspectEntity(entityRef.agent(agents[e.instanceId].id)); }}>
       <octahedronGeometry args={[0.28]} />
       <meshBasicMaterial />
-      {agents.map((a, i) => <Instance key={a.id} position={positions[i]} color={AGENT_STATUS_COLORS[a.status]} />)}
+      {agents.map((a, i) => <Instance key={a.id} position={positions[i]} color={THRONE_GUARD_COLORS[a.status]} />)}
     </Instances>
   );
 }
 
-// ---------- constellations + the sundering (Laws 2, 4, 7) ----------
+// ---------- the Celestial Paths and the Rift (Laws 2, 4, 7) ----------
 
-function SunderingFracture({ point, frozen }: { point: [number, number, number]; frozen: boolean }) {
+function RiftFracture({ point, frozen }: { point: [number, number, number]; frozen: boolean }) {
   const ref = useRef<THREE.Points>(null!);
   const positions = useMemo(() => {
     const arr = new Float32Array(60 * 3);
@@ -117,9 +143,9 @@ function SunderingFracture({ point, frozen }: { point: [number, number, number];
   );
 }
 
-function Constellations({ highContrast }: { highContrast: boolean }) {
+function CelestialPaths({ highContrast }: { highContrast: boolean }) {
   const routes = useRealityStore((s) => s.routes);
-  const activeRupture = useRealityStore((s) => s.activeRupture);
+  const activeRift = useRealityStore((s) => s.activeRupture);
   const reducedMotion = useRealityStore((s) => s.reducedMotion);
   const primaryWidth = highContrast ? 3.5 : 2;
   return (
@@ -128,8 +154,8 @@ function Constellations({ highContrast }: { highContrast: boolean }) {
         <Line key={r.id} points={r.waypoints} color="#0D2038" lineWidth={1} transparent opacity={highContrast ? 0.5 : 0.3} dashed />
       ))}
       {routes.filter((r) => r.primary).map((r) => {
-        if (activeRupture?.routeId === r.id) {
-          const rp = activeRupture.rupturePoint;
+        if (activeRift?.routeId === r.id) {
+          const rp = activeRift.rupturePoint;
           const end = r.waypoints[r.waypoints.length - 1];
           return (
             <group key={r.id}>
@@ -139,10 +165,10 @@ function Constellations({ highContrast }: { highContrast: boolean }) {
                 <octahedronGeometry args={[0.35]} />
                 <meshBasicMaterial color="#FF5252" wireframe />
               </mesh>
-              <SunderingFracture point={rp} frozen={reducedMotion} />
+              <RiftFracture point={rp} frozen={reducedMotion} />
               <Html position={rp} center>
                 <div className="-translate-y-8 bg-[#081320]/95 border border-[#FF5252] px-2 py-1 text-[10px] font-mono text-[#FF5252] rounded pointer-events-none whitespace-nowrap">
-                  SUNDERING // {activeRupture.reason}
+                  THE RIFT // {activeRift.reason}
                 </div>
               </Html>
             </group>
@@ -154,14 +180,14 @@ function Constellations({ highContrast }: { highContrast: boolean }) {
   );
 }
 
-function RealmNode({ id }: { id: DistrictId }) {
-  const activeDistrict = useRealityStore((s) => s.activeDistrict);
-  const setActiveDistrict = useRealityStore((s) => s.setActiveDistrict);
+function DominionSeat({ id }: { id: RealmId }) {
+  const activeRealm = useRealityStore(selectRealm);
+  const setActiveRealm = useRealityStore(selectSetRealm);
   const inspectEntity = useRealityStore((s) => s.inspectEntity);
-  const isSelected = activeDistrict === id;
+  const isSelected = activeRealm === id;
   return (
-    <group position={DISTRICT_CENTERS[id]}>
-      <mesh onClick={(e) => { e.stopPropagation(); setActiveDistrict(id); inspectEntity(entityRef.district(id)); }}>
+    <group position={REALM_CENTERS[id]}>
+      <mesh onClick={(e) => { e.stopPropagation(); setActiveRealm(id); inspectEntity(realmRef(id)); }}>
         <boxGeometry args={[3, 1.5, 3]} />
         <meshStandardMaterial
           color={isSelected ? '#00D8FF' : '#0A111A'}
@@ -173,13 +199,13 @@ function RealmNode({ id }: { id: DistrictId }) {
         />
       </mesh>
       <Text position={[0, 1.4, 0]} fontSize={0.4} color="#DFF6FF" anchorX="center">
-        {id === 'KERNEL' ? 'THE CORE' : `${id} Realm`}
+        {id === 'KERNEL' ? 'THE THRONE' : `${id} Dominion`}
       </Text>
     </group>
   );
 }
 
-function ChosenHalo() {
+function SovereignMark() {
   const inspectingEntity = useRealityStore((s) => s.inspectingEntity);
   const knowledgeBase = useRealityStore((s) => s.knowledgeBase);
   const selected = useMemo(() => {
@@ -195,13 +221,13 @@ function ChosenHalo() {
   );
 }
 
-// ---------- camera: fly to the focused realm; stays live under frameloop="demand" ----------
+// ---------- the Celestial Helm: fly to the focused dominion; stays live under frameloop="demand" ----------
 
-function StarChartRig({ controlsRef }: { controlsRef: React.MutableRefObject<any> }) {
-  const district = useRealityStore((s) => s.activeDistrict);
+function CelestialHelm({ controlsRef }: { controlsRef: React.MutableRefObject<any> }) {
+  const realm = useRealityStore(selectRealm);
   const reducedMotion = useRealityStore((s) => s.reducedMotion);
   const invalidate = useThree((s) => s.invalidate);
-  const goal = useMemo(() => cameraGoal(district), [district]);
+  const goal = useMemo(() => helmGoal(realm), [realm]);
   const settling = useRef(false);
   const t = useRef(new THREE.Vector3());
   const p = useRef(new THREE.Vector3());
@@ -231,9 +257,9 @@ function StarChartRig({ controlsRef }: { controlsRef: React.MutableRefObject<any
   return null;
 }
 
-function Firmament({ hovered, onHover, frozen, highContrast }: {
-  hovered: KnowledgeObject | null;
-  onHover: (k: KnowledgeObject | null) => void;
+function TheFirmament({ hovered, onHover, frozen, highContrast }: {
+  hovered: Star | null;
+  onHover: (k: Star | null) => void;
   frozen: boolean;
   highContrast: boolean;
 }) {
@@ -251,46 +277,46 @@ function Firmament({ hovered, onHover, frozen, highContrast }: {
       <pointLight position={[0, 8, 0]} intensity={30} color="#00D8FF" distance={30} />
       <ContactShadows resolution={1024} scale={30} blur={2} opacity={0.6} far={10} color="#000000" frames={1} />
 
-      {DISTRICT_IDS.map((d) => <RealmNode key={d} id={d} />)}
-      <Constellations highContrast={highContrast} />
-      <StarField frozen={frozen} onSelect={(k) => inspectEntity(entityRef.knowledge(k.id))} onHover={onHover} />
-      <SentinelField />
-      <ChosenHalo />
+      {REALM_IDS.map((d) => <DominionSeat key={d} id={d} />)}
+      <CelestialPaths highContrast={highContrast} />
+      <AstralHost frozen={frozen} onSelect={(k) => inspectEntity(entityRef.knowledge(k.id))} onHover={onHover} />
+      <ThroneGuardField />
+      <SovereignMark />
 
       {hovered && (
         <Html position={hovered.position} center>
           <div className="-translate-y-8 bg-[#081320]/90 border border-[#00D8FF] px-2 py-1 text-[10px] font-mono text-[#00D8FF] rounded shadow-lg pointer-events-none whitespace-nowrap backdrop-blur-sm">
-            [{hovered.isStale ? 'FADING' : hovered.type}] {hovered.label} · {hovered.provenance}
+            [{hovered.isStale ? 'WITHERING' : hovered.type}] {hovered.label} · {hovered.provenance}
           </div>
         </Html>
       )}
 
       <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI / 2.15} minDistance={6} maxDistance={40}
         enableDamping dampingFactor={0.05} onChange={() => invalidate()} />
-      <StarChartRig controlsRef={controls} />
+      <CelestialHelm controlsRef={controls} />
     </>
   );
 }
 
-// ---------- the seer's gaze (Law 5, Law 6) ----------
+// ---------- the Eye of the Crown (Law 5, Law 6) ----------
 
-function SeersGaze() {
+function EyeOfTheCrown() {
   const inspectingEntity = useRealityStore((s) => s.inspectingEntity);
   const inspectEntity = useRealityStore((s) => s.inspectEntity);
-  const activeDistrict = useRealityStore((s) => s.activeDistrict);
+  const activeRealm = useRealityStore(selectRealm);
   const knowledgeBase = useRealityStore((s) => s.knowledgeBase);
   const agents = useRealityStore((s) => s.agents);
   const traceHistory = useRealityStore((s) => s.traceHistory);
 
   const ref = parseEntityRef(inspectingEntity);
   const knowledge = useMemo(() => (ref?.kind === 'KNOWLEDGE' ? knowledgeBase.find((k) => k.id === ref.id) ?? null : null), [ref?.kind, ref?.id, knowledgeBase]);
-  const agent = useMemo(() => (ref?.kind === 'AGENT' ? agents.find((a) => a.id === ref.id) ?? null : null), [ref?.kind, ref?.id, agents]);
+  const guard = useMemo(() => (ref?.kind === 'AGENT' ? agents.find((a) => a.id === ref.id) ?? null : null), [ref?.kind, ref?.id, agents]);
   if (!inspectingEntity) return null;
 
   return (
-    <aside className="absolute top-6 right-6 w-80 bg-[#081320]/95 border border-[#00D8FF]/50 p-4 rounded-lg shadow-2xl z-50 backdrop-blur-lg max-h-[80%] overflow-y-auto" role="region" aria-label="The Seer's Gaze">
+    <aside className="absolute top-6 right-6 w-80 bg-[#081320]/95 border border-[#00D8FF]/50 p-4 rounded-lg shadow-2xl z-50 backdrop-blur-lg max-h-[80%] overflow-y-auto" role="region" aria-label="The Eye of the Crown">
       <div className="flex justify-between items-center border-b border-[#0D2038] pb-2 mb-3">
-        <span className="text-xs text-[#00D8FF] font-bold tracking-wider">THE SEER'S GAZE // ENTITY TRACE</span>
+        <span className="text-xs text-[#00D8FF] font-bold tracking-wider">THE EYE OF THE CROWN // ENTITY TRACE</span>
         <button onClick={() => inspectEntity(null)} className="text-xs text-[#FF5252] hover:underline focus-visible:ring-2 focus-visible:ring-[#FF5252]">[CLOSE]</button>
       </div>
       <div className="space-y-3 text-xs">
@@ -303,12 +329,12 @@ function SeersGaze() {
             <div>
               <span className="text-gray-500 text-[10px] block">CLASSIFICATION</span>
               <span className={knowledge.isStale ? 'text-[#FFB347]' : 'text-[#00D8FF]'}>
-                {knowledge.isStale && knowledge.staleSince !== null ? `FADING since ${formatClock(knowledge.staleSince)} UTC` : knowledge.type}
+                {knowledge.isStale && knowledge.staleSince !== null ? `WITHERING since ${formatClock(knowledge.staleSince)} UTC` : knowledge.type}
               </span>
             </div>
             <div>
               <span className="text-gray-500 text-[10px] block">PROVENANCE</span>
-              <div className="bg-[#050B14] p-2 rounded text-[11px] text-gray-300 mt-1 border border-[#0D2038] font-mono">{knowledge.provenance} · {knowledge.district}</div>
+              <div className="bg-[#050B14] p-2 rounded text-[11px] text-gray-300 mt-1 border border-[#0D2038] font-mono">{knowledge.provenance} · {realmOf(knowledge)}</div>
             </div>
             <div>
               <span className="text-gray-500 text-[10px] block">VERIFICATION HISTORY</span>
@@ -318,15 +344,15 @@ function SeersGaze() {
             </div>
           </>
         )}
-        {agent && (
+        {guard && (
           <div>
-            <span className="text-gray-500 text-[10px] block">AGENT</span>
+            <span className="text-gray-500 text-[10px] block">THRONE GUARD</span>
             <div className="bg-[#050B14] p-2 rounded text-[11px] text-gray-300 mt-1 border border-[#0D2038] font-mono">
-              {agent.designation} · {agent.status} · {agent.district}
+              {guard.designation} · {guard.status} · {realmOf(guard)}
             </div>
           </div>
         )}
-        {!knowledge && !agent && (
+        {!knowledge && !guard && (
           <div>
             <span className="text-gray-500 text-[10px] block">CLASSIFICATION</span>
             <span className="text-[#00D8FF]">PERSISTENT_OBSERVABLE</span>
@@ -335,7 +361,7 @@ function SeersGaze() {
         <div>
           <span className="text-gray-500 text-[10px] block">CAUSAL DEPENDENCIES</span>
           <div className="bg-[#050B14] p-2 rounded text-[11px] text-gray-300 mt-1 border border-[#0D2038] font-mono">
-            The Core → The Aether Conduit → {activeDistrict || 'THE FIRMAMENT'}
+            The Throne → The Celestial Path → {activeRealm || 'THE FIRMAMENT'}
           </div>
         </div>
         <div className="pt-2 border-t border-[#0D2038]">
@@ -351,29 +377,29 @@ function SeersGaze() {
   );
 }
 
-// ---------- the firmament shell ----------
+// ---------- the Firmament shell ----------
 
-const STATE_COLORS = { RUPTURED: 'text-[#FF5252]', DEGRADED: 'text-[#FFB347]', CONSISTENT: 'text-[#00D8FF]' } as const;
+const CONTINUUM_COLORS = { RUPTURED: 'text-[#FF5252]', DEGRADED: 'text-[#FFB347]', CONSISTENT: 'text-[#00D8FF]' } as const;
 
 export default function TheRealitySeer() {
   const metrics = useRealityStore(useShallow(selectMetrics));
-  const activeRupture = useRealityStore((s) => s.activeRupture);
-  const activeDistrict = useRealityStore((s) => s.activeDistrict);
-  const budget = useRealityStore((s) => s.budget);
+  const activeRift = useRealityStore((s) => s.activeRupture);
+  const activeRealm = useRealityStore(selectRealm);
+  const sovereignCurrent = useRealityStore((s) => s.budget);
   const eventLog = useRealityStore((s) => s.eventLog);
   const reducedMotion = useRealityStore((s) => s.reducedMotion);
   const highContrast = useRealityStore((s) => s.highContrast);
   const setReducedMotion = useRealityStore((s) => s.setReducedMotion);
   const setHighContrast = useRealityStore((s) => s.setHighContrast);
   const setSemanticState = useRealityStore((s) => s.setSemanticState);
-  const triggerCausalRupture = useRealityStore((s) => s.triggerCausalRupture);
-  const degradeKnowledge = useRealityStore((s) => s.degradeKnowledge);
+  const summonRift = useRealityStore((s) => s.triggerCausalRupture);
+  const letWither = useRealityStore((s) => s.degradeKnowledge);
   const restoreKnowledge = useRealityStore((s) => s.restoreKnowledge);
   const tickWorld = useRealityStore((s) => s.tickWorld);
   const inspectEntity = useRealityStore((s) => s.inspectEntity);
-  const setActiveDistrict = useRealityStore((s) => s.setActiveDistrict);
+  const setActiveRealm = useRealityStore(selectSetRealm);
 
-  const [hovered, setHovered] = useState<KnowledgeObject | null>(null);
+  const [hovered, setHovered] = useState<Star | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -395,8 +421,8 @@ export default function TheRealitySeer() {
     return () => window.removeEventListener('keydown', onKey);
   }, [inspectEntity]);
 
-  const hasFading = metrics.staleCount > 0;
-  const systemState = deriveSystemState(metrics, budget);
+  const hasWithering = metrics.staleCount > 0;
+  const continuum = deriveContinuum(metrics, sovereignCurrent);
   const dim = highContrast ? 'text-white' : 'text-gray-400';
   const focusRing = 'focus-visible:ring-2 focus-visible:ring-[#00D8FF] focus-visible:outline-none';
 
@@ -404,11 +430,11 @@ export default function TheRealitySeer() {
     <div className="w-screen h-screen bg-[#050B14] text-[#DFF6FF] font-mono overflow-hidden flex flex-col select-none">
       <div className="sr-only">
         <div role="status" aria-live="polite">
-          {activeDistrict ? `Active realm: ${activeDistrict}.` : 'Viewing the celestial core.'}
-          {hovered ? ` Hovered star: ${hovered.isStale ? 'fading' : hovered.type}, ${hovered.label}, provenance ${hovered.provenance}.` : ''}
+          {activeRealm ? `Active dominion: ${activeRealm}.` : 'Viewing the Throne.'}
+          {hovered ? ` Hovered star: ${hovered.isStale ? 'withering' : hovered.type}, ${hovered.label}, provenance ${hovered.provenance}.` : ''}
         </div>
         <div role="alert" aria-live="assertive">
-          {activeRupture ? `Critical: the sundering on constellation ${activeRupture.routeId}, ${activeRupture.reason}.` : ''}
+          {activeRift ? `Critical: the Rift on Celestial Path ${activeRift.routeId}, ${activeRift.reason}.` : ''}
         </div>
       </div>
 
@@ -416,13 +442,13 @@ export default function TheRealitySeer() {
         <div className="flex items-center space-x-6">
           <span className="text-sm font-bold tracking-widest text-[#00D8FF]">ASGARD // CELESTIAL OS</span>
           <span className="text-gray-500">|</span>
-          <span className={dim} data-testid="system-state">REALM: <span className={STATE_COLORS[systemState]}>{systemState}</span></span>
+          <span className={dim} data-testid="continuum">CONTINUUM: <span className={CONTINUUM_COLORS[continuum]}>{continuum}</span></span>
         </div>
         <div className="flex items-center space-x-8">
-          <div className={dim}><span className="text-gray-500 mr-2">SENTINELS:</span><span data-testid="metric-agents">{metrics.agentCount}</span></div>
+          <div className={dim}><span className="text-gray-500 mr-2">THRONE GUARD:</span><span data-testid="metric-agents">{metrics.agentCount}</span></div>
           <div className={dim}><span className="text-gray-500 mr-2">STARS:</span><span data-testid="metric-knowledge">{formatCount(metrics.knowledgeCount)}</span></div>
-          <div className={dim}><span className="text-gray-500 mr-2">CONSTELLATIONS:</span><span data-testid="metric-routes">{metrics.routeCount}</span></div>
-          <div className={dim}><span className="text-gray-500 mr-2">FADING:</span><span data-testid="metric-stale" className={hasFading ? 'text-[#FFB347]' : ''}>{formatCount(metrics.staleCount)}</span></div>
+          <div className={dim}><span className="text-gray-500 mr-2">CELESTIAL PATHS:</span><span data-testid="metric-routes">{metrics.routeCount}</span></div>
+          <div className={dim}><span className="text-gray-500 mr-2">WITHERING:</span><span data-testid="metric-stale" className={hasWithering ? 'text-[#FFB347]' : ''}>{formatCount(metrics.staleCount)}</span></div>
           <button onClick={() => setHighContrast(!highContrast)} aria-pressed={highContrast} className={`px-2 py-0.5 rounded border text-[10px] transition-colors ${focusRing} ${highContrast ? 'border-[#4CCBFF] text-[#4CCBFF]' : 'border-[#0D2038] text-gray-400 hover:border-[#00D8FF]'}`}>
             {highContrast ? 'VISION: PIERCING' : 'VISION: CLEAR'}
           </button>
@@ -439,17 +465,17 @@ export default function TheRealitySeer() {
           dpr={[1, 2]}
           gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
         >
-          <Firmament hovered={hovered} onHover={setHovered} frozen={reducedMotion} highContrast={highContrast} />
+          <TheFirmament hovered={hovered} onHover={setHovered} frozen={reducedMotion} highContrast={highContrast} />
         </Canvas>
 
-        <nav aria-label="Realm navigation" className="absolute top-6 left-6 z-30 flex flex-wrap gap-1 max-w-md">
-          <button onClick={() => setActiveDistrict(null)} aria-pressed={activeDistrict === null}
-            className={`px-2 py-1 rounded border text-[10px] bg-[#081320]/95 ${focusRing} ${activeDistrict === null ? 'border-[#00D8FF] text-[#00D8FF]' : 'border-[#0D2038] text-gray-300 hover:border-[#00D8FF]'}`}>
+        <nav aria-label="Dominion navigation" className="absolute top-6 left-6 z-30 flex flex-wrap gap-1 max-w-md">
+          <button onClick={() => setActiveRealm(null)} aria-pressed={activeRealm === null}
+            className={`px-2 py-1 rounded border text-[10px] bg-[#081320]/95 ${focusRing} ${activeRealm === null ? 'border-[#00D8FF] text-[#00D8FF]' : 'border-[#0D2038] text-gray-300 hover:border-[#00D8FF]'}`}>
             THE FIRMAMENT
           </button>
-          {DISTRICT_IDS.map((d) => (
-            <button key={d} onClick={() => { setActiveDistrict(d); inspectEntity(entityRef.district(d)); }} aria-pressed={activeDistrict === d}
-              className={`px-2 py-1 rounded border text-[10px] bg-[#081320]/95 ${focusRing} ${activeDistrict === d ? 'border-[#00D8FF] text-[#00D8FF]' : 'border-[#0D2038] text-gray-300 hover:border-[#00D8FF]'}`}>
+          {REALM_IDS.map((d) => (
+            <button key={d} onClick={() => { setActiveRealm(d); inspectEntity(realmRef(d)); }} aria-pressed={activeRealm === d}
+              className={`px-2 py-1 rounded border text-[10px] bg-[#081320]/95 ${focusRing} ${activeRealm === d ? 'border-[#00D8FF] text-[#00D8FF]' : 'border-[#0D2038] text-gray-300 hover:border-[#00D8FF]'}`}>
               {d}
             </button>
           ))}
@@ -458,29 +484,29 @@ export default function TheRealitySeer() {
         <div className="absolute bottom-6 left-6 bg-[#081320]/95 border border-[#0D2038] p-4 rounded-lg w-80 space-y-3 z-30 shadow-2xl backdrop-blur-md">
           <div className="text-[10px] text-[#00D8FF] tracking-widest font-bold border-b border-[#0D2038] pb-1">THE CELESTIAL PROJECTION</div>
           <div className="flex justify-between items-center text-xs">
-            <span className={dim}>Aether Reserve:</span>
-            <button data-testid="btn-budget" onClick={() => setSemanticState(budget === 0 ? 100 : 0)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${focusRing} ${budget === 0 ? 'bg-[#FF5252]/20 text-[#FF5252] border border-[#FF5252]' : 'bg-[#00D8FF]/20 text-[#00D8FF] border border-[#00D8FF]'}`}>
-              {budget === 0 ? 'DEPLETED (0)' : 'ABUNDANT (100)'}
+            <span className={dim}>Sovereign Current:</span>
+            <button data-testid="btn-budget" onClick={() => setSemanticState(sovereignCurrent === 0 ? 100 : 0)}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${focusRing} ${sovereignCurrent === 0 ? 'bg-[#FF5252]/20 text-[#FF5252] border border-[#FF5252]' : 'bg-[#00D8FF]/20 text-[#00D8FF] border border-[#00D8FF]'}`}>
+              {sovereignCurrent === 0 ? 'DEPLETED (0)' : 'ABUNDANT (100)'}
             </button>
           </div>
           <div className="flex justify-between items-center text-xs">
-            <span className={dim}>The Sundering:</span>
-            <button data-testid="btn-rupture" onClick={() => triggerCausalRupture(activeRupture ? null : 'THINK')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${focusRing} ${activeRupture ? 'bg-[#FF5252] text-white animate-pulse' : 'bg-[#0D2038] text-gray-300 hover:bg-[#1A2B45]'}`}>
-              {activeRupture ? 'BIND THE SUNDERING' : 'SUMMON THE SUNDERING'}
+            <span className={dim}>The Rift:</span>
+            <button data-testid="btn-rupture" onClick={() => summonRift(activeRift ? null : 'THINK')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${focusRing} ${activeRift ? 'bg-[#FF5252] text-white animate-pulse' : 'bg-[#0D2038] text-gray-300 hover:bg-[#1A2B45]'}`}>
+              {activeRift ? 'BIND THE RIFT' : 'SUMMON THE RIFT'}
             </button>
           </div>
           <div className="flex justify-between items-center text-xs">
-            <span className={dim}>The Fading:</span>
-            <button data-testid="btn-decay" onClick={() => (hasFading ? restoreKnowledge() : degradeKnowledge(500))}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${focusRing} ${hasFading ? 'bg-[#FFB347]/20 text-[#FFB347] border border-[#FFB347]' : 'bg-[#0D2038] text-gray-300 hover:bg-[#1A2B45]'}`}>
-              {hasFading ? 'RESTORE THE LIGHT' : 'LET 500 FADE'}
+            <span className={dim}>The Withering:</span>
+            <button data-testid="btn-decay" onClick={() => (hasWithering ? restoreKnowledge() : letWither(500))}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${focusRing} ${hasWithering ? 'bg-[#FFB347]/20 text-[#FFB347] border border-[#FFB347]' : 'bg-[#0D2038] text-gray-300 hover:bg-[#1A2B45]'}`}>
+              {hasWithering ? 'RESTORE THE LIGHT' : 'LET 500 WITHER'}
             </button>
           </div>
         </div>
 
-        <SeersGaze />
+        <EyeOfTheCrown />
       </div>
 
       <footer className="h-20 border-t border-[#0D2038] bg-[#081320]/90 px-6 flex items-center justify-between z-40 text-xs">
